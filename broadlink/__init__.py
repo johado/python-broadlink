@@ -7,6 +7,26 @@ import random
 import socket
 import threading
 
+def dump_payload(payload, info=''):
+  print info
+  s=''
+  h=''
+  for i in range(len(payload)):
+    h = h + "%02x " % ord(payload[i])
+    if ord(payload[i]) > 32 and ord(payload[i]) < 127:
+      s = s + str(payload[i])
+    elif ord(payload[i]) == 0:
+      s = s + ' '
+    else:
+      s = s + '.'
+    if (i+1) % 16 == 0:
+      line = h + s
+      h=''
+      s=''
+      print line
+  line = h + s
+  print line
+
 def gendevice(devtype, host, mac):
   if devtype == 0: # SP1
     return sp1(host=host, mac=mac)
