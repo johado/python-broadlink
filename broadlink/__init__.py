@@ -516,7 +516,7 @@ class rm2(rm):
 
 # Setup a new Broadlink device via AP Mode. Review the README to see how to enter AP Mode.
 # Only tested with Broadlink RM3 Mini (Blackbean)
-def setup(ssid, password, security_mode):
+def setup(ssid, password, security_mode, local_ip_address=None):
   # Security mode options are (0 - none, 1 = WEP, 2 = WPA1, 3 = WPA2, 4 = WPA1/2)
   payload = bytearray(0x88)
   payload[0x26] = 0x14  # This seems to always be set to 14
@@ -545,8 +545,15 @@ def setup(ssid, password, security_mode):
   payload[0x20] = checksum & 0xff  # Checksum 1 position
   payload[0x21] = checksum >> 8  # Checksum 2 position
 
+  if local_ip_address is None:
+      s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+      s.connect(('8.8.8.8', 53))  # connecting to a UDP address doesn't send packets
+      local_ip_address = s.getsockname()[0]
+
+  address = local_ip_address.split('.')
   sock = socket.socket(socket.AF_INET,  # Internet
                        socket.SOCK_DGRAM)  # UDP
   sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
   sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+  sock.bind((local_ip_address,0))
   sock.sendto(payload, ('255.255.255.255', 80))
