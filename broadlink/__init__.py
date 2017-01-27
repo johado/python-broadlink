@@ -27,7 +27,64 @@ def dump_payload(payload, info=''):
   line = h + s
   print line
 
-def gendevice(devtype, host, mac, name):
+def byteval(c):
+  """ return an int of the byte value (due to python 2.7 vs 3.0 differences) """
+  if type(c) == int:
+    return c
+  else:
+    return ord(c)
+
+def data2hexstr(data):
+  """ Take binary data and return a hex string. """
+  s = '';
+  for i in range(len(data)):
+    s = s + "%02x" % byteval(data[i])
+  return s
+
+def hexstr2data(hexstr):
+  """ Takes hexencoded binary data and return a byte array """
+  data = bytearray(len(hexstr)/2)
+  for i in range(len(data)):
+    hex = hexstr[i*2] + hexstr[i*2+1]
+    data[i] = int(hex, 16)
+  return data
+
+def mac2str(mac, sep=":"):
+  """ Takes reverse binary mac and return a correct sep separated mac string. """
+  s = "%02x%s%02x%s%02x%s%02x%s%02x%s%02x" % (mac[5], sep, mac[4], sep, mac[3], sep, mac[2], sep, mac[1], sep, mac[0])
+  return s
+
+def data2str(data):
+  """ Takes null terminated binary data and return a string """
+  s = '';
+  for i in range(len(data)):
+    if byteval(data[i]) == 0:
+      return s
+    s = s + "%c" % byteval(data[i])
+  return s
+
+def dev2devinfo(dev):
+  """ Takes a dev object and generates a devinfo struct that can be JSON encoded """
+  devinfo = {}
+  devinfo['devtype'] = dev.devtype
+  devinfo['host'] = "%s:%s" % dev.host
+  devinfo['mac'] = data2hexstr(dev.mac)
+  devinfo['type'] = dev.type
+  devinfo['id'] = data2hexstr(dev.id)
+  devinfo['key'] = data2hexstr(dev.key)
+  devinfo['name'] = dev.name
+  return devinfo
+
+def devinfo2dev(devinfo):
+    """ Takes a devinfo struct and instantiates and initialises a dev object. """
+    host = devinfo['host'].split(':')
+    host = (host[0], host[1])
+    dev = gendevice(devinfo['devtype'], host, hexstr2data(devinfo['mac']), devinfo['name'])
+    dev.key = hexstr2data(devinfo['key'])
+    dev.id = hexstr2data(devinfo['id'])
+    return dev
+
+def devicecreate(devtype, host, mac, name):
   if devtype == 0: # SP1
     return sp1(host=host, mac=mac, name=name)
   if devtype == 0x2711: # SP2
@@ -70,6 +127,11 @@ def gendevice(devtype, host, mac, name):
     return mp1(host=host, mac=mac, name=name)
   else:
     return device(host=host, mac=mac, name=name)
+
+def gendevice(devtype, host, mac, name):
+  dev = devicecreate(devtype, host, mac, name)
+  dev.devtype = devtype
+  return dev
 
 def discover(timeout=None, local_ip_address=None):
   if local_ip_address is None:
@@ -134,7 +196,7 @@ def discover(timeout=None, local_ip_address=None):
     devtype = responsepacket[0x34] | responsepacket[0x35] << 8
     # At least for SP2 devices, the nicename is null padded
     # after the mac. The app allows 20 characters, but mayby more is allowed.
-    name = responsepacket[0x40:0x40+20]
+    name = data2str(responsepacket[0x40:0x40+20])
     return gendevice(devtype, host, mac, name)
   else:
     while (time.time() - starttime) < timeout:
@@ -149,7 +211,7 @@ def discover(timeout=None, local_ip_address=None):
       mac = responsepacket[0x3a:0x40]
       # At least for SP2 devices, the nicename is null padded
       # after the mac. The app allows 20 characters, but mayby more is allowed.
-      name = responsepacket[0x40:0x40+20]
+      name = data2str(responsepacket[0x40:0x40+20])
       dev = gendevice(devtype, host, mac, name)
       devices.append(dev)
     return devices
