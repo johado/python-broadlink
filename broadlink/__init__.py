@@ -78,7 +78,7 @@ def dev2devinfo(dev):
 def devinfo2dev(devinfo):
     """ Takes a devinfo struct and instantiates and initialises a dev object. """
     host = devinfo['host'].split(':')
-    host = (host[0], host[1])
+    host = (host[0], int(host[1]))
     dev = gendevice(devinfo['devtype'], host, hexstr2data(devinfo['mac']), devinfo['name'])
     dev.key = hexstr2data(devinfo['key'])
     dev.id = hexstr2data(devinfo['id'])
