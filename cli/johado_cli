@@ -1,0 +1,205 @@
+#!/usr/bin/env python
+
+import sys
+import os
+import time
+import broadlink
+import json
+from pprint import pprint
+
+def usage():
+    print " -h  This help"
+    print " --ssid  SSID for configuring new device"
+    print " --pwd   WIFI passwd for configuring new device"
+    print " -d device"
+    print " -c command (getpower, setpower=0 setpower=1, setname"
+    print " -v value  "        
+    
+starttime = time.time()
+newstate = None
+ssid = None
+# Put your wifi pwd here if you are lacy:
+wifipwd = ""
+securitymode = 3
+devicestr=None
+commandstr=None
+valstr=None
+global devices
+devices = []
+
+jsonconfig = None
+global conffile
+conffile = os.path.dirname(sys.argv[0]) + '/broadlink.json'
+if os.path.isfile(conffile):
+    with open(conffile, 'r') as json_file:
+        jsonconfig = json.load(json_file)
+        for devinfo in jsonconfig['devices']:
+            dev = broadlink.devinfo2dev(devinfo)
+            devices.append(dev)
+
+if len(sys.argv) > 1:
+    arg = 1
+    while arg < len(sys.argv):
+        if sys.argv[arg] == '-h':
+            usage()
+            exit(0)
+        elif sys.argv[arg] == '--ssid':
+            arg = arg + 1
+            ssid = sys.argv[arg]
+        elif sys.argv[arg] == '--pwd':
+            arg = arg + 1
+            wifipwd = sys.argv[arg]
+        elif sys.argv[arg] == '-d':
+            arg = arg + 1
+            devicestr = sys.argv[arg]
+        elif sys.argv[arg] == '-c':
+            arg = arg + 1
+            commandstr = sys.argv[arg]
+        elif sys.argv[arg] == '-v':
+            arg = arg + 1
+            valstr = sys.argv[arg]            
+        elif sys.argv[arg] == 'On':
+            newstate = True
+            print "Next state: %s" % (newstate)            
+        elif sys.argv[arg] == 'Off':
+            newstate = False
+            print "Next state: %s" % (newstate)
+        else:
+            print "Unknown argument: %s" % (sys.argv[arg])
+        arg = arg + 1
+
+def print_device(dev):
+  global newstate
+  status = ''
+  if dev.type == "SP2":
+      print "Checking %s %s " %(broadlink.mac2str(dev.mac), dev.name)
+      state = dev.check_power()
+      status = '?'
+      if state == True:
+          status = 'On'
+          #newstate = False
+      elif state == False:
+          status = 'Off'
+          #newstate = True
+
+  (ip, port) = dev.host
+  print "%s: %s %s:%s %s - %s" % (dev.type, dev.name, ip, port, broadlink.mac2str(dev.mac), status)
+  
+local_ip = "192.168.1.1"
+
+if ssid:
+    # sudo killall hostapd
+    # sudo ifconfig wlan0 up
+    # sudo iw wlan0 connect -w BroadlinkProv
+    print "Attempting to setup device to SSID %s using BroadlinkProv" % ssid
+    broadlink.setup(ssid, wifipwd, securitymode, local_ip_address=local_ip)
+    exit(0)
+
+    
+def discover(local_ip, dump_json=False):
+  global conffile
+  global devices  
+  devices = broadlink.discover(timeout=1.3, local_ip_address=local_ip)
+  # Obtain the authentication key required for further communication:
+  devicesinfo = []
+  if devices:
+    for dev in devices:
+        dev.auth()
+        devinfo = broadlink.dev2devinfo(dev)
+
+        devinfodev = broadlink.devinfo2dev(devinfo)
+        devinfo2 = broadlink.dev2devinfo(devinfodev)
+        if devinfo2 != devinfo:
+            print("Mismatch in conversion: %s vs %s" % (devinfo, devinfo2))
+        dev.devinfo = devinfo
+        devicesinfo.append(devinfo)
+        print_device(dev)
+    jsonconfig = {}
+    jsonconfig['devices'] = devicesinfo
+    #pprint(jsonconfig)
+    if dump_json:
+        print json.dumps(jsonconfig, sort_keys=True, indent=2, separators=(',', ': '))
+        with open(conffile, 'w') as f:
+            f.write(json.dumps(jsonconfig, sort_keys=True, indent=2, separators=(',', ': ')))
+  else:
+    print "No devices found"
+  return devices
+
+def devicebyname(devices, name='', mac='', ip=''):
+    for dev in devices:
+        if dev.name == name:
+            return dev
+    return None    
+    
+
+if commandstr == 'discover':
+    devices = discover(local_ip, dump_json = True)
+elif commandstr == 'setpower=0' or commandstr == 'setpower=1' or commandstr == 'setpower':
+    if not devices:
+        devices = discover(local_ip)
+    dev = devicebyname(devices, devicestr)
+    if dev:
+        newstate = False        
+        if commandstr == 'setpower=1':
+            newstate = True
+        elif commandstr == 'setpower':
+            if valstr == '1' or valstr == 'on':
+                newstate = True
+        print "Setting %s.power to %s " % (dev.name, newstate)
+        dev.set_power(newstate)
+elif commandstr == 'getpower':
+    #Check power state on a SmartPlug:
+    if not devices:
+        devices = discover(local_ip)
+    dev = devicebyname(devices, devicestr)
+    if dev:
+        state = dev.check_power()
+        print "%s.power=%s" % (dev.name, state)
+    else:
+        print "No device %s found" % devicestr
+elif commandstr == 'setname':
+    #Set name on a SmartPlug:
+    if not devices:
+        devices = discover(local_ip)
+    dev = devicebyname(devices, devicestr)
+    if dev:
+        dev.set_name(valstr)
+    else:
+        print "No device %s found" % devicestr
+
+else:
+    devices = discover(local_ip, dump_json = True)        
+
+
+#Enter learning mode:
+#devices[0].enter_learning()
+
+#Obtain an IR or RF packet while in learning mode:
+#ir_packet = devices[0].check_data()
+
+#(This will return None if the device does not have a packet to return)
+
+#Send an IR or RF packet:
+#
+#devices[0].send_data(ir_packet)
+
+#Obtain temperature data from an RM2:
+#devices[0].check_temperature()
+
+#Obtain sensor data from an A1:
+#data = devices[0].check_sensors()
+
+#Check power state on a SmartPlug:
+#print "Check state"
+#state = devices[0].check_power()
+#pprint(state)
+# Set power state on a SmartPlug SP2/SP3:
+
+
+
+
+#Set power state for S1 on a SmartPowerStrip MP1:
+#devices[0].set_power(1, True)
+
+#Check power state on a SmartPowerStrip:
+#state = devices[0].check_power()
