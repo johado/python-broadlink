@@ -293,6 +293,7 @@ class device:
     packet[0x05] = 0xa5
     packet[0x06] = 0xaa
     packet[0x07] = 0x55
+    # Some packets have 0x28 here instead of 0x2a
     packet[0x24] = 0x2a
     packet[0x25] = 0x27
     packet[0x26] = command
@@ -424,6 +425,14 @@ class sp2(device):
   def __init__ (self, host, mac, name):
     device.__init__(self, host, mac, name)
     self.type = "SP2"
+
+  def set_name(self, name):
+    """Sets the name of the smart plug. App accepts 20 chars, but sniffed encrypted payload is 122 bytes. """
+    packet = bytearray(64)
+    packet[0] = 0
+    for i in range(len(name)):
+      packet[4+i] = name[i]
+    self.send_packet(0x6a, packet)
 
   def set_power(self, state):
     """Sets the power state of the smart plug."""
