@@ -347,8 +347,8 @@ class device:
 
 
 class mp1(device):
-  def __init__ (self, host, mac):
-    device.__init__(self, host, mac)
+  def __init__ (self, host, mac, name):
+    device.__init__(self, host, mac, name)
     self.type = "MP1"
 
   def set_power_mask(self, sid_mask, state):
@@ -537,8 +537,8 @@ class a1(device):
 
 
 class rm(device):
-  def __init__ (self, host, mac):
-    device.__init__(self, host, mac)
+  def __init__ (self, host, mac, name):
+    device.__init__(self, host, mac, name)
     self.type = "RM2"
 
   def check_data(self):
@@ -578,7 +578,7 @@ class rm(device):
 # For legay compatibility - don't use this
 class rm2(rm):
   def __init__ (self):
-    device.__init__(self, None, None)
+    device.__init__(self, None, None, None)
 
   def discover(self):
     dev = discover()
